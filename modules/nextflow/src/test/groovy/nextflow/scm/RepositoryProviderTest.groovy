@@ -18,6 +18,9 @@ package nextflow.scm
 
 import spock.lang.Specification
 
+import nextflow.Global
+import nextflow.cloud.aws.AmazonCloudDriver
+
 /**
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
@@ -45,6 +48,15 @@ class RepositoryProviderTest extends Specification {
         then:
         provider instanceof BitbucketRepositoryProvider
         provider.endpointUrl == 'https://bitbucket.org/api/2.0/repositories/project/z'
+
+        when:
+        GroovySpy(Global, global: true)
+        _ * Global.getAwsCredentials(*_) >> ['abc', 'xyz']
+        _ * Global.getAwsRegion(*_) >> 'us-west-2'
+        provider = RepositoryProvider.create(new ProviderConfig('codecommit'), 'codecommit://project')
+        then:
+        provider instanceof AwsCodeCommitRepositoryProvider
+        provider.endpointUrl == 'https://git-codecommit.us-west-2.amazonaws.com/v1/repos/project'
 
         when:
         provider = RepositoryProvider.create(new ProviderConfig('local', [path:'/user/data']),'local/w')

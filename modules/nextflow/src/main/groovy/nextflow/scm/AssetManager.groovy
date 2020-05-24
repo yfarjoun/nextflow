@@ -41,7 +41,6 @@ import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.Ref
 import org.eclipse.jgit.lib.Repository
-import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import static nextflow.Const.DEFAULT_HUB
 import static nextflow.Const.DEFAULT_MAIN_FILE_NAME
 import static nextflow.Const.DEFAULT_ORGANIZATION
@@ -302,9 +301,17 @@ class AssetManager {
                 }
                 else {
                     // find the provider config for this server
-                    def config = providerConfigs.find { it.domain == url.domain }
+                    def config = providerConfigs.find { it.domain == url.domain || url.domain.matches(it.domain) }
                     this.hub = config?.name
-                    result = resolveProjectName0(url.path, config?.server)
+
+                    if ( hub == 'codecommit') {
+                        def project = resolveProjectName0(url.path, config?.server)
+                        def region = url.domain.split("\\.")[1]
+                        result = "codecommit::$region://$project"
+                    } else {
+                        result = resolveProjectName0(url.path, config?.server)
+                    }
+                    
                 }
                 log.debug "Repository URL: $repository; Project: $result; Hub provider: $hub"
 
@@ -313,6 +320,15 @@ class AssetManager {
             catch( IllegalArgumentException e ) {
                 log.debug "Cannot parse Git URL: $repository -- cause: ${e.message}"
             }
+        }
+
+        if ( repository.startsWith('codecommit:') ) {
+            // use git-remote-codecommit style project names for code commit
+            // codecommit::[region]://<repository-name>
+            this.hub = 'codecommit'
+            log.debug "Repository URL: $repository; Project: $repository; Hub provider: $hub"
+
+            return repository
         }
 
         return null
@@ -580,7 +596,7 @@ class AssetManager {
             // clone it
             def clone = Git.cloneRepository()
             if( provider.hasCredentials() )
-                clone.setCredentialsProvider( new UsernamePasswordCredentialsProvider(provider.user, provider.password) )
+                clone.setCredentialsProvider( provider.getGitCredentials() )
 
             if( revision ) {
                 clone.setBranch(revision)
@@ -632,7 +648,7 @@ class AssetManager {
         }
 
         if( provider.hasCredentials() )
-            pull.setCredentialsProvider( new UsernamePasswordCredentialsProvider(provider.user, provider.password))
+            pull.setCredentialsProvider( provider.getGitCredentials())
 
         def result = pull.call()
         if(!result.isSuccessful())
@@ -659,8 +675,9 @@ class AssetManager {
 
         clone.setURI(uri)
         clone.setDirectory(directory)
+        
         if( provider.hasCredentials() )
-            clone.setCredentialsProvider(new UsernamePasswordCredentialsProvider(provider.user, provider.password))
+            clone.setCredentialsProvider(provider.getGitCredentials())
 
         if( revision )
             clone.setBranch(revision)
@@ -917,7 +934,7 @@ class AssetManager {
         try {
             def fetch = git.fetch()
             if(provider.hasCredentials()) {
-                fetch.setCredentialsProvider( new UsernamePasswordCredentialsProvider(provider.user, provider.password) )
+                fetch.setCredentialsProvider( provider.getGitCredentials() )
             }
             fetch.call()
             git.checkout()
@@ -962,7 +979,7 @@ class AssetManager {
         init.call()
         // call submodule update
         if( provider.hasCredentials() )
-            update.setCredentialsProvider( new UsernamePasswordCredentialsProvider(provider.user, provider.password) )
+            update.setCredentialsProvider( provider.getGitCredentials() )
         def updatedList = update.call()
         log.debug "Update submodules $updatedList"
     }
@@ -1054,6 +1071,10 @@ class AssetManager {
                             ? "Can't find git repository remote host -- Check config file at path: $localGitConfig"
                             : "Can't find git repository config file -- Repository may be corrupted: $localPath" )
             throw new AbortOperationException(message)
+        }
+
+        if ( domain.matches("git-codecommit\\..*?\\.amazonaws\\.com") ) {
+            return "codecommit"
         }
 
         final result = providerConfigs.find { it -> it.domain == domain }

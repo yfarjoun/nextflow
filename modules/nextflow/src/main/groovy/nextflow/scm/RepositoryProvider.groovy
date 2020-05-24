@@ -24,6 +24,9 @@ import groovy.transform.Memoized
 import groovy.util.logging.Slf4j
 import nextflow.Const
 import nextflow.exception.AbortOperationException
+
+import org.eclipse.jgit.transport.CredentialsProvider
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 /**
  *
  * Base class for a generic source repository provider
@@ -105,6 +108,14 @@ abstract class RepositoryProvider {
     List<BranchInfo> getBranches() { throw new UnsupportedOperationException("Get branches operation not support by ${this.getClass().getSimpleName()} provider") }
 
     List<TagInfo> getTags() { throw new UnsupportedOperationException("Get tags operation not support by ${this.getClass().getSimpleName()} provider") }
+
+    /**
+     * @return a org.eclipse.jgit.transport.CredentialsProvider object for authenticating git operations
+     * like clone, fetch, pull, and update
+     **/
+    CredentialsProvider getGitCredentials() {
+        return new UsernamePasswordCredentialsProvider(getUser(), getPassword())
+    }
 
     /**
      * Invoke the API request specified
@@ -271,6 +282,9 @@ abstract class RepositoryProvider {
 
             case 'gitea':
                 return new GiteaRepositoryProvider(project, config)
+            
+            case 'codecommit':
+                return new AwsCodeCommitRepositoryProvider(project, config)
 
             case 'file':
                 // remove the 'local' prefix for the file provider
