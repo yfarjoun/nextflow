@@ -33,6 +33,7 @@ import nextflow.cloud.types.CloudMachineInfo
 import nextflow.cloud.types.PriceModel
 import nextflow.exception.ProcessSubmitException
 import nextflow.exception.ProcessUnrecoverableException
+import nextflow.executor.BashWrapperBuilder
 import nextflow.processor.TaskBean
 import nextflow.processor.TaskHandler
 import nextflow.processor.TaskRun
@@ -252,7 +253,7 @@ class GoogleLifeSciencesTaskHandler extends TaskHandler {
 
     @Override
     void submit() {
-        createTaskWrapper()
+        createTaskWrapper().build()
         final req = createPipelineRequest()
         log.trace "[GLS] Task created > $task.name - Request: $req"
 
@@ -276,9 +277,8 @@ class GoogleLifeSciencesTaskHandler extends TaskHandler {
         operation.getName().tokenize('/')[-1]
     }
 
-    @PackageScope
-    void createTaskWrapper() {
-        new GoogleLifeSciencesScriptLauncher(this.taskBean, this) .build()
+    protected BashWrapperBuilder createTaskWrapper() {
+        new GoogleLifeSciencesScriptLauncher(this.taskBean, this)
     }
 
     @PackageScope
