@@ -310,6 +310,7 @@ class GoogleLifeSciencesTaskHandler extends TaskHandler {
         req.network = executor.config.network
         req.subnetwork = executor.config.subnetwork
         req.serviceAccountEmail = executor.config.serviceAccountEmail
+        req.keepAliveOnFailure = executor.config.keepAliveOnFailure
         return req
     }
 

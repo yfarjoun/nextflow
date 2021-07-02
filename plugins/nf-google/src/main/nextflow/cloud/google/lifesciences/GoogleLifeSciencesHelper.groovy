@@ -157,12 +157,13 @@ class GoogleLifeSciencesHelper {
 
     protected List<Action> createActions(GoogleLifeSciencesSubmitRequest req) {
         def result = []
-        if( config.sshDaemon ) {
+        if( config.sshDaemon || config.keepAliveOnFailure ) 
             result.add(createSshDaemonAction(req))
-        }
         result.add(createStagingAction(req))
         result.add(createMainAction(req))
         result.add(createUnstagingAction(req))
+        if( config.keepAliveOnFailure )
+            result.add(createKeepAlive(req))
         return result
     }
 
@@ -266,6 +267,15 @@ class GoogleLifeSciencesHelper {
                 "$req.taskName-unstage",
                 config.copyImage,
                 ["bash", "-c", getUnstagingScript(req.workDir)],
+                createMounts(req),
+                [ActionFlags.ALWAYS_RUN, ActionFlags.IGNORE_EXIT_STATUS])
+    }
+
+    protected Action createKeepAlive(GoogleLifeSciencesSubmitRequest req) {
+        createAction(
+                "$req.taskName-keepalive",
+                config.copyImage,
+                ["bash", "-c", "[ \$GOOGLE_PIPELINE_FAILED -eq 1 ] && sleep 60m"],
                 createMounts(req),
                 [ActionFlags.ALWAYS_RUN, ActionFlags.IGNORE_EXIT_STATUS])
     }
