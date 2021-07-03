@@ -34,6 +34,7 @@ import nextflow.util.MemoryUnit
  * Helper class wrapping configuration required for Google Pipelines.
  *
  * @author Ólafur Haukur Flygenring <olafurh@wuxinextcode.com>
+ * @author  Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Slf4j
 @ToString(includePackage = false, includeNames = true)

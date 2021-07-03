@@ -46,7 +46,7 @@ import nextflow.util.Escape
  * Helper class for Google Pipelines.
  *
  * @author Ólafur Haukur Flygenring <olafurh@wuxinextcode.com>
- * @author  Paolo Di Tommaso <paolo.ditommaso@gmail.com>
+ * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
 @Slf4j
 @CompileStatic
@@ -119,7 +119,7 @@ class GoogleLifeSciencesHelper {
         return result
     }
 
-    Action createAction(String name, String imageUri, List<String> commands, List<Mount> mounts, List<ActionFlags> flags = [], String entrypoint = null) {
+    protected Action createAction0(String name, String imageUri, List<String> commands, List<Mount> mounts, List<ActionFlags> flags = [], String entrypoint = null) {
         final action = new Action()
                 .setContainerName(name)
                 .setImageUri(imageUri)
@@ -245,7 +245,7 @@ class GoogleLifeSciencesHelper {
         if( !req.entryPoint )
             cmd.add(0, 'bash')
 
-        createAction(
+        createAction0(
                 "$req.taskName-main",
                 req.containerImage,
                 cmd,
@@ -255,7 +255,7 @@ class GoogleLifeSciencesHelper {
     }
 
     protected Action createStagingAction(GoogleLifeSciencesSubmitRequest req) {
-        createAction(
+        createAction0(
                 "$req.taskName-stage",
                 config.copyImage,
                 ["bash", "-c", getStagingScript(req.workDir)],
@@ -263,7 +263,7 @@ class GoogleLifeSciencesHelper {
     }
 
     protected Action createUnstagingAction(GoogleLifeSciencesSubmitRequest req) {
-        createAction(
+        createAction0(
                 "$req.taskName-unstage",
                 config.copyImage,
                 ["bash", "-c", getUnstagingScript(req.workDir)],
@@ -272,7 +272,7 @@ class GoogleLifeSciencesHelper {
     }
 
     protected Action createKeepAlive(GoogleLifeSciencesSubmitRequest req) {
-        createAction(
+        createAction0(
                 "$req.taskName-keepalive",
                 config.copyImage,
                 ["bash", "-c", "[ \$GOOGLE_PIPELINE_FAILED -eq 1 ] && sleep 60m"],
