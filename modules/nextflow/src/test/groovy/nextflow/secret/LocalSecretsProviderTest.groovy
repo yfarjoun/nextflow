@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021, Seqera Labs
+ * Copyright 2021, Sage-Bionetworks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -119,7 +119,7 @@ class LocalSecretsProviderTest extends Specification {
     }
 
 
-    def 'should add secrets' () {
+    def 'should put secrets' () {
         given:
         def folder = Files.createTempDirectory('test')
         def secretFile = folder.resolve('secrets.json');
@@ -139,6 +139,30 @@ class LocalSecretsProviderTest extends Specification {
         provider.getSecret('other') == null
         and:
         provider.listSecretNames() == ['bar','foo'] as Set
+
+        cleanup:
+        folder.deleteDir()
+    }
+
+    def 'should override secrets' () {
+        given:
+        def folder = Files.createTempDirectory('test')
+        def secretFile = folder.resolve('secrets.json');
+        and:
+        def FOO1 = new SecretImpl('foo', 'x')
+        def FOO2 = new SecretImpl('foo', 'y')
+        and:
+        def provider = new LocalSecretsProvider(storeFile: secretFile)
+
+        when:
+        provider.putSecret(FOO1)
+        then:
+        provider.getSecret('foo') == FOO1
+
+        when:
+        provider.putSecret(FOO2)
+        then:
+        provider.getSecret('foo') == FOO2
 
         cleanup:
         folder.deleteDir()
@@ -193,7 +217,6 @@ class LocalSecretsProviderTest extends Specification {
         def env = provider.getSecretEnv()
         then:
         env == "source $file"
-
 
         cleanup:
         folder?.deleteDir()

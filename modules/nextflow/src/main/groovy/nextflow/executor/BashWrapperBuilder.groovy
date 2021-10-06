@@ -36,7 +36,6 @@ import nextflow.processor.TaskBean
 import nextflow.processor.TaskProcessor
 import nextflow.processor.TaskRun
 import nextflow.secret.SecretsLoader
-import nextflow.secret.SecretsProvider
 import nextflow.util.Escape
 /**
  * Builder to create the BASH script which is used to
@@ -100,8 +99,6 @@ class BashWrapperBuilder {
     private Path wrapperFile
 
     private BashTemplateEngine engine = new BashTemplateEngine()
-
-    private SecretsProvider secretsProvider
 
     BashWrapperBuilder( TaskRun task ) {
         this(new TaskBean(task))
@@ -257,7 +254,7 @@ class BashWrapperBuilder {
          * add the task secrets
          */
         if( !isSecretNative() ) {
-            binding.secret_env = getSecretEnv()
+            binding.secrets_env = getSecretsEnv()
         }
 
         /*
@@ -293,7 +290,7 @@ class BashWrapperBuilder {
         return binding
     }
 
-    protected String getSecretEnv() {
+    protected String getSecretsEnv() {
         return SecretsLoader.instance.load() .getSecretEnv()
     }
 

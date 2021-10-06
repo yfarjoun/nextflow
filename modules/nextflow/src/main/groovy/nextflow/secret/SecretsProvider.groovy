@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021, Seqera Labs
+ * Copyright 2021, Sage-Bionetworks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,11 @@ import org.pf4j.ExtensionPoint
  */
 interface SecretsProvider extends ExtensionPoint, Closeable {
 
+    /**
+     * Loads the secretes from the underlying provider store
+     *
+     * @return the {@link SecretsProvider} instance itself
+     */
     SecretsProvider load()
 
     /**
@@ -57,5 +62,8 @@ interface SecretsProvider extends ExtensionPoint, Closeable {
      */
     Set<String> listSecretNames()
 
+    /**
+     * @return A shell snippet defining the secrets as environment variables
+     */
     String getSecretEnv()
 }

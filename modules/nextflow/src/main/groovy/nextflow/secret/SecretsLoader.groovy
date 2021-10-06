@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021, Seqera Labs
+ * Copyright 2021, Sage-Bionetworks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import nextflow.exception.AbortOperationException
 import nextflow.plugin.Plugins
 
 /**
+ * Implements dynamic secret providing loading strategy
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */

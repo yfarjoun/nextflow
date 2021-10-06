@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021, Seqera Labs
+ * Copyright 2021, Sage-Bionetworks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ class SecretsContextTest extends Specification {
         def holder = (SecretHolder) secret
         then:
         holder.getSecretName() == 'foo'
-        holder.call() == '<foo>'
+        holder.call() == 'secrets.foo'
         
         when:
         holder.getSecretValue()

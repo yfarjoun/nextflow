@@ -17,29 +17,23 @@
 
 package nextflow.secret
 
-import com.google.common.hash.Hasher
-import groovy.transform.CompileStatic
-import groovy.transform.EqualsAndHashCode
-import groovy.transform.Immutable
-import nextflow.util.CacheFunnel
-import nextflow.util.CacheHelper
+import java.util.regex.Pattern
 
 /**
- * Basic secret implementation
+ * Implements Secrets helper methods
  *
  * @author Paolo Di Tommaso <paolo.ditommaso@gmail.com>
  */
-@EqualsAndHashCode
-@CompileStatic
-@Immutable
-class SecretImpl implements Secret, CacheFunnel {
-    String name
-    String value
+class SecretsHelper {
 
-    @Override
-    Hasher funnel(Hasher hasher, CacheHelper.HashMode mode) {
-        hasher.putUnencodedChars(name)
-        hasher.putUnencodedChars(value)
-        return hasher
+    private final static Pattern NAME_REGEX = ~/^[a-zA-Z_](?:[0-9A-Za-z]+|(_)(?!\1)){1,49}$/
+
+    static void checkName(String name) {
+        final msg = "Invalid secret name: $name — It can only contains alphanumeric and non-consecutive underscore characters and cannot start with a numeric character"
+        if( !NAME_REGEX.matcher(name).matches() )
+            throw new IllegalArgumentException(msg)
+        if( name.startsWith('__') )
+            throw new IllegalArgumentException(msg)
     }
+
 }

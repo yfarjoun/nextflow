@@ -32,7 +32,7 @@ import nextflow.secret.SecretsProvider
  */
 @Slf4j
 @CompileStatic
-@Parameters(commandDescription = "Manage pipeline secrets")
+@Parameters(commandDescription = "Manage pipeline secrets (preview)")
 class CmdSecret extends CmdBase implements UsageAware {
 
     interface SubCmd {
@@ -41,7 +41,7 @@ class CmdSecret extends CmdBase implements UsageAware {
         void usage(List<String> result)
     }
 
-    static public final String NAME = 'secret'
+    static public final String NAME = 'secrets'
 
     private List<SubCmd> commands = []
 
@@ -49,10 +49,10 @@ class CmdSecret extends CmdBase implements UsageAware {
         return NAME
     }
 
-    @Parameter(names=['-name'], description = 'Secret name')
+    @Parameter(names=['-n','-name'], description = 'Secret name')
     String secretName
 
-    @Parameter(names=['-value'], description = 'Secret value')
+    @Parameter(names=['-v','-value'], description = 'Secret value')
     String secretValue
 
     @Parameter(hidden = true)
@@ -61,9 +61,10 @@ class CmdSecret extends CmdBase implements UsageAware {
     private SecretsProvider provider
 
     CmdSecret() {
+        commands.add( new GetCmd() )
         commands.add( new PutCmd() )
         commands.add( new ListCmd() )
-        commands.add( new RemoveCmd() )
+        commands.add( new DeleteCmd() )
     }
 
     /**
@@ -83,7 +84,7 @@ class CmdSecret extends CmdBase implements UsageAware {
         def result = []
         if( !args ) {
             result << this.getClass().getAnnotation(Parameters).commandDescription()
-            result << 'Usage: nextflow secret <sub-command> [arg] [options]'
+            result << 'Usage: nextflow secret <sub-command> [options]'
             result << ''
             result << 'Commands:'
             commands.collect{ it.name }.sort().each { result << "  $it".toString()  }
@@ -178,6 +179,28 @@ class CmdSecret extends CmdBase implements UsageAware {
         }
     }
 
+    class GetCmd implements SubCmd {
+
+        @Override
+        String getName() { 'get' }
+
+        @Override
+        void apply() {
+            if( !secretName )
+                throw new AbortOperationException("Missing secret name")
+            println provider.getSecret(secretName)?.value
+        }
+
+        @Override
+        void usage(List<String> result) {
+            result << 'Get a secret value with the name'
+            result << "Usage: nextflow secret $name -name <NAME>".toString()
+            result << ''
+            addOption('secretName', result)
+            result << ''
+        }
+    }
+
     /**
      * Implements the secret `list` sub-command
      */
@@ -209,9 +232,9 @@ class CmdSecret extends CmdBase implements UsageAware {
     /**
      * Implements the secret `remove` sub-command
      */
-    class RemoveCmd implements SubCmd {
+    class DeleteCmd implements SubCmd {
         @Override
-        String getName() { 'remove' }
+        String getName() { 'delete' }
 
         @Override
         void apply() {
@@ -222,7 +245,7 @@ class CmdSecret extends CmdBase implements UsageAware {
 
         @Override
         void usage(List<String> result) {
-            result << 'Remove an entry from the secret store'
+            result << 'Delete an entry from the secret store'
             result << "Usage: nextflow secret $name -name".toString()
             result << ''
             addOption('secretName', result)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. Seqera Labs, S.L.
+ * Copyright 2021, Sage-Bionetworks
  *
  * All Rights reserved
  *

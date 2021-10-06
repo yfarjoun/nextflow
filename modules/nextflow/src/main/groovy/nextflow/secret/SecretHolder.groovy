@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021. Seqera Labs, S.L.
+ * Copyright 2021, Sage-Bionetworks
  *
  * All Rights reserved
  *
@@ -39,7 +39,7 @@ class SecretHolder extends Closure {
 
     Object getSecretValue() {
         if( provider == null )
-            throw new IllegalStateException("Missing secret provider - unable to resolve secret '$secretName'")
+            throw new IllegalStateException("Missing secret provider — unable to resolve secret '$secretName'")
         final secret = provider.getSecret(secretName)
         if( secret==null )
             throw new MissingSecretException("Unknown config secret '$secretName'")
@@ -56,6 +56,6 @@ class SecretHolder extends Closure {
     }
 
     private Object resolve0() {
-        isBound() ? getSecretValue() : "<$secretName>"
+        isBound() ? getSecretValue() : "secrets.$secretName"
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2021, Seqera Labs
+ * Copyright 2021, Sage-Bionetworks
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ import groovy.transform.CompileStatic
 import groovy.transform.Memoized
 import nextflow.Const
 import nextflow.exception.AbortOperationException
+import nextflow.util.CacheHelper
+
 /**
  * Implements a secrets store that saves secrets into a JSON file save into the
  * nextflow home. The file can be relocated using the env variable {@code NXF_SECRETS_FILE}.
@@ -44,7 +46,7 @@ class LocalSecretsProvider implements SecretsProvider, Closeable {
 
     private Map<String,String> env = System.getenv()
 
-    private Set<Secret> secretsSet
+    private Map<String,Secret> secretsMap
 
     private Path storeFile
 
@@ -52,21 +54,25 @@ class LocalSecretsProvider implements SecretsProvider, Closeable {
 
     LocalSecretsProvider() {
         storeFile = makeStoreFile()
-        secretsSet = makeSecretsSet()
+        secretsMap = makeSecretsSet()
     }
 
     protected Path makeStoreFile() {
-        final name = env.NXF_SECRETS_FILE ?: 'secrets.json'
-        return name.startsWith('/')
+        final name = env.NXF_SECRETS_FILE ?: 'secrets/store.json'
+        final secretFile = name.startsWith('/')
                 ? Paths.get(name)
                 : Const.APP_HOME_DIR.resolve(name)
+        final path = secretFile.parent
+        if( !path.exists() && !path.parent.mkdirs() )
+            throw new IllegalStateException("Cannot create directory '${path}' -- make sure you have write permissions or file with the same name already exists")
+        return secretFile
     }
 
-    protected Set<Secret> makeSecretsSet() {
-        new TreeSet<Secret>(new Comparator<Secret>() {
+    protected Map<String,Secret> makeSecretsSet() {
+        new TreeMap<String, Secret>(new Comparator<String>() {
             @Override
-            int compare(Secret o1,Secret o2) {
-                return o1.getName() <=> o2.getName()
+            int compare(String o1,String o2) {
+                return o1 <=> o2
             }
         })
     }
@@ -78,17 +84,20 @@ class LocalSecretsProvider implements SecretsProvider, Closeable {
     @Override
     LocalSecretsProvider load() {
         // load secrets field
-        secretsSet.addAll( loadSecrets() )
+        final allSecrets = loadSecrets()
+        for( Secret secret : allSecrets )
+            secretsMap.put(secret.name, secret)
         return this
     }
 
     @Override
     Secret getSecret(String name) {
-        return secretsSet.find(it -> it.getName()==name)
+        return secretsMap.get(name)
     }
 
     @Override
     void putSecret(String name, String value) {
+        SecretsHelper.checkName(name)
         putSecret(new SecretImpl(name, value))
     }
 
@@ -97,21 +106,20 @@ class LocalSecretsProvider implements SecretsProvider, Closeable {
             throw new IllegalStateException("Missing secret name")
         if( !secret.getValue() )
             throw new IllegalStateException("Missing secret value")
-        secretsSet.add(secret)
+        secretsMap.put(secret.name, secret)
         modified = true
     }
 
     @Override
     void removeSecret(String name) {
-        final found = getSecret(name)
-        if( found ) {
-            secretsSet.remove(found)
+        if( secretsMap.containsKey(name) ) {
+            secretsMap.remove(name)
             modified = true
         }
     }
 
     Set<String> listSecretNames() {
-        new HashSet<String>(secretsSet.collect(it -> it.getName()))
+        return secretsMap.keySet()
     }
 
     protected List<Secret> loadSecrets() {
@@ -141,7 +149,7 @@ class LocalSecretsProvider implements SecretsProvider, Closeable {
     @Override
     void close() throws IOException {
         if( modified )
-            storeSecrets(secretsSet)
+            storeSecrets(secretsMap.values())
     }
 
     @Override
@@ -160,19 +168,26 @@ class LocalSecretsProvider implements SecretsProvider, Closeable {
      */
     @Memoized // cache this method to avoid creating multiple copies of the same file
     protected Path makeTempSecretsFile() {
-        if( !secretsSet )
+        if( !secretsMap )
             return null
 
+        final name = ".nf-${CacheHelper.hasher(secretsMap.values()).hash()}.secrets"
+        final path = storeFile.parent.resolve(name)
+        if( path.exists() ) {
+            // make sure the file can only be accessed by the owner user
+            path.setPermissions(ONLY_OWNER_PERMS)
+            return path
+        }
+
         def result = ''
-        for( Secret s : secretsSet ) {
+        for( Secret s : secretsMap.values() ) {
             result += /export ${s.name}="${s.value}"/
             result += '\n'
         }
-        final tmp = Files.createTempFile(storeFile.parent, 'nf-env-','.temp')
+        Files.createFile(path)
         // make sure the file can only be accessed by the owner user
-        tmp.setPermissions(ONLY_OWNER_PERMS)
-        tmp.deleteOnExit()
-        tmp.text = result
-        return tmp
+        path.setPermissions(ONLY_OWNER_PERMS)
+        path.text = result
+        return path
     }
 }

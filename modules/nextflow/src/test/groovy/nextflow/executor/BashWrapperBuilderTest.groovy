@@ -26,7 +26,6 @@ import nextflow.container.ContainerConfig
 import nextflow.container.DockerBuilder
 import nextflow.container.SingularityBuilder
 import nextflow.processor.TaskBean
-import nextflow.secret.LocalSecretsProvider
 import nextflow.util.MustacheTemplateEngine
 import spock.lang.Specification
 import spock.lang.Unroll
@@ -50,7 +49,12 @@ class BashWrapperBuilderTest extends Specification {
             bean.workDir = Paths.get('/work/dir')
         if( !bean.script )
             bean.script = 'echo Hello world!'
-        new BashWrapperBuilder(bean as TaskBean)
+        new BashWrapperBuilder(bean as TaskBean) {
+            @Override
+            protected String getSecretsEnv() {
+                return null
+            }
+        }
     }
 
     def 'test map constructor'() {
@@ -480,28 +484,28 @@ class BashWrapperBuilderTest extends Specification {
         when:
         def binding0 = newBashWrapperBuilder().makeBinding()
         then:
-        binding0.containsKey('secret_env')
-        binding0.secret_env == null
+        binding0.containsKey('secrets_env')
+        binding0.secrets_env == null
 
         when:
         def builder1 = Spy(newBashWrapperBuilder()) {
-            getSecretEnv() >> 'source /some/file.txt'
+            getSecretsEnv() >> 'source /some/file.txt'
             isSecretNative() >> false
         }
         and:
         def binding1 = builder1.makeBinding()
         then:
-        binding1.secret_env == 'source /some/file.txt'
+        binding1.secrets_env == 'source /some/file.txt'
 
         when:
         def builder2 = Spy(newBashWrapperBuilder()) {
-            getSecretEnv() >> 'source /some/file.txt'
+            getSecretsEnv() >> 'source /some/file.txt'
             isSecretNative() >> true
         }
         and:
         def binding2 = builder2.makeBinding()
         then:
-        binding2.secret_env == null
+        binding2.secrets_env == null
     }
 
 
