@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2023, Seqera Labs
+ * Copyright 2013-2024, Seqera Labs
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@ class ScriptRunner {
         return this
     }
 
-    ScriptRunner setPreview(boolean  value, Closure<Void> action) {
+    ScriptRunner setPreview(boolean value, Closure<Void> action) {
         this.preview = value
         this.previewAction = action
         return this
@@ -131,9 +131,14 @@ class ScriptRunner {
         session.start()
         try {
             // parse the script
-            parseScript(scriptFile, entryName)
-            // run the code
-            run()
+            try {
+                parseScript(scriptFile, entryName)
+                // run the code
+                run()
+            }
+            finally {
+                log.debug "Parsed script files:${scriptFiles0()}"
+            }
             // await completion
             await()
             // shutdown session
@@ -148,6 +153,13 @@ class ScriptRunner {
             throw new AbortRunException()
         }
 
+        return result
+    }
+
+    protected String scriptFiles0() {
+        def result = ''
+        for( Map.Entry<String,Path> it : ScriptMeta.allScriptNames() )
+            result += "\n  ${it.key}: ${it.value.toUriString()}"
         return result
     }
 
