@@ -812,7 +812,7 @@ class TaskProcessor {
                 if( shouldTryCache ) {
                     if( !entry ) {
                         final other = session.cache.findTraceRecord { trace ->
-                            trace.get('name') == task.getName()
+                            trace.get('process') == task.processor.name && trace.get('tag') == task.config.tag.toString()
                         }
                         if( other ) {
                             final hashStr = hash.toString()
