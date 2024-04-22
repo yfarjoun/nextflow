@@ -599,7 +599,6 @@ class ConfigBuilder {
 
         // -- sets the dry run option
         if( cmdRun.dryRun ) {
-            config.resume = true
             config.dryRun = cmdRun.dryRun
         }
 
