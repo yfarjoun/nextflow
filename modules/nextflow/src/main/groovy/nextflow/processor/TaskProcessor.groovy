@@ -57,6 +57,7 @@ import nextflow.ast.TaskCmdXform
 import nextflow.ast.TaskTemplateVarsXform
 import nextflow.cloud.CloudSpotTerminationException
 import nextflow.dag.NodeMarker
+import nextflow.exception.CacheInvalidationException
 import nextflow.exception.FailedGuardException
 import nextflow.exception.IllegalArityException
 import nextflow.exception.MissingFileException
@@ -73,6 +74,7 @@ import nextflow.executor.CachedTaskHandler
 import nextflow.executor.Executor
 import nextflow.executor.StoredTaskHandler
 import nextflow.extension.CH
+import nextflow.extension.ChannelEx
 import nextflow.extension.DataflowHelper
 import nextflow.file.FileHelper
 import nextflow.file.FileHolder
@@ -807,9 +809,41 @@ class TaskProcessor {
                     exists = resumeDir.exists()
 
                 log.trace "[${safeTaskName(task)}] Cacheable folder=${resumeDir?.toUriString()} -- exists=$exists; try=$tries; shouldTryCache=$shouldTryCache; entry=$entry"
-                final cached = shouldTryCache && exists && entry.trace.isCompleted() && checkCachedOutput(task.clone(), resumeDir, hash, entry)
-                if( cached )
-                    break
+                if( shouldTryCache ) {
+                    if( !entry ) {
+                        final other = session.cache.findTraceRecord { trace ->
+                            trace.get('name') == task.getName()
+                        }
+                        if( other ) {
+                            final hashStr = hash.toString()
+                            final hashLog = "${hashStr[0..<2]}/${hashStr[2..<8]}"
+                            def message = "task hash is different: ${other.get('hash')} -> ${hashLog}"
+
+                            final otherScript = other.get('script') as String
+                            if( task.script != otherScript ) {
+                                message += "\n  script (${other.get('hash')}):"
+                                otherScript.eachLine { line -> message += "\n  ${line}" }
+                                message += "\n  script (${hashLog}):"
+                                task.script.eachLine { line -> message += "\n  ${line}" }
+                            }
+                            throw new CacheInvalidationException(message)
+                        }
+                    }
+
+                    else if( !exists )
+                        throw new CacheInvalidationException("work directory for cached task was not found")
+
+                    else if( !entry.trace.isCompleted() )
+                        throw new CacheInvalidationException("cached task did not complete successfully")
+
+                    else {
+                        checkCachedOutput(task.clone(), resumeDir, hash, entry)
+                        break
+                    }
+                }
+            }
+            catch (CacheInvalidationException e) {
+                log.info "[${safeTaskName(task)}] Cached task must be re-executed -- reason: ${e.message}"
             }
             catch (Throwable t) {
                 log.warn1("[${safeTaskName(task)}] Unable to resume cached task -- See log file for details", causedBy: t)
@@ -822,7 +856,7 @@ class TaskProcessor {
 
             if( session.dryRun ) {
                 println "[DRY RUN] new task > ${safeTaskName(task)} [${hash}]"
-                updateState { StateObj it -> it.incCompleted() }
+                ChannelEx.update(state) { StateObj it -> it.incCompleted() }
                 break
             }
 
@@ -906,13 +940,13 @@ class TaskProcessor {
     }
 
     /**
-     * Check whenever the outputs for the specified task already exist
+     * Check whether the outputs of a given task are available. Throw
+     * an excpetion if they are not.
      *
      * @param task The task instance
-     * @param folder The folder where the outputs are stored (eventually)
-     * @return {@code true} when all outputs are available, {@code false} otherwise
+     * @param folder The folder where the outputs are stored
      */
-    final boolean checkCachedOutput(TaskRun task, Path folder, HashCode hash, TaskEntry entry) {
+    final void checkCachedOutput(TaskRun task, Path folder, HashCode hash, TaskEntry entry) {
 
         // check if exists the task exit code file
         def exitCode = null
@@ -923,34 +957,21 @@ class TaskProcessor {
                 str = exitFile.text?.trim()
             }
             catch( IOException e ) {
-                log.trace "[${safeTaskName(task)}] Exit file can't be read > $exitFile -- return false -- Cause: ${e.message}"
-                return false
+                throw new CacheInvalidationException("exitcode file couldn't be read (${exitFile}) -- cause: ${e.message}")
             }
 
             exitCode = str.isInteger() ? str.toInteger() : null
             if( !task.isSuccess(exitCode) ) {
-                log.trace "[${safeTaskName(task)}] Exit code is not valid > $str -- return false"
-                return false
+                throw new CacheInvalidationException("exit code is not valid: ${str}")
             }
         }
 
         /*
          * verify cached context map
          */
-        if( !entry ) {
-            log.trace "[${safeTaskName(task)}] Missing cache entry -- return false"
-            return false
-        }
-
         if( task.hasCacheableValues() && !entry.context ) {
-            log.trace "[${safeTaskName(task)}] Missing cache context -- return false"
-            return false
+            throw new CacheInvalidationException("task output variables are missing")
         }
-
-        /*
-         * verify stdout file
-         */
-        final stdoutFile = folder.resolve( TaskRun.CMD_OUTFILE )
 
         if( entry.context != null ) {
             task.context = entry.context
@@ -961,7 +982,9 @@ class TaskProcessor {
         try {
             // -- expose task exit status to make accessible as output value
             task.config.exitStatus = exitCode
+
             // -- check if all output resources are available
+            final stdoutFile = folder.resolve( TaskRun.CMD_OUTFILE )
             collectOutputs(task, folder, stdoutFile, task.context)
 
             // set the exit code in to the task object
@@ -975,18 +998,13 @@ class TaskProcessor {
 
             log.info "[${task.hashLog}] Cached process > ${task.name}"
             // -- notify cached event
-            if( entry )
-                session.notifyTaskCached(new CachedTaskHandler(task,entry.trace))
+            session.notifyTaskCached(new CachedTaskHandler(task,entry.trace))
 
             // -- now bind the results
             finalizeTask0(task)
-            return true
         }
         catch( MissingFileException | MissingValueException e ) {
-            log.trace "[${safeTaskName(task)}] Missed cache > ${e.getMessage()} -- folder: $folder"
-            task.exitStatus = Integer.MAX_VALUE
-            task.workDir = null
-            return false
+            throw new CacheInvalidationException("failed to collect outputs from directory $folder -- cause: ${e.message}")
         }
     }
 
@@ -2418,11 +2436,7 @@ class TaskProcessor {
         }
 
         // increment the number of processes executed
-        updateState { StateObj it -> it.incCompleted() }
-    }
-
-    private void updateState(Closure action) {
-        state.update action
+        state.update { StateObj it -> it.incCompleted() }
     }
 
     protected void terminateProcess() {
@@ -2519,7 +2533,7 @@ class TaskProcessor {
             if( log.isTraceEnabled() )
                 log.trace "<${name}> Before run -- messages: ${messages}"
             // the counter must be incremented here, otherwise it won't be consistent
-            updateState { StateObj it -> it.incSubmitted() }
+            state.update { StateObj it -> it.incSubmitted() }
             // task index must be created here to guarantee consistent ordering
             // with the sequence of messages arrival since this method is executed in a thread safe manner
             final params = new TaskStartParams(TaskId.next(), indexCount.incrementAndGet())
@@ -2566,7 +2580,7 @@ class TaskProcessor {
                 if( log.isTraceEnabled() )
                     log.trace "<${name}> Poison pill arrived; port: $index"
                 openPorts.set(index, 0) // mark the port as closed
-                updateState { StateObj it -> it.poison() }
+                state.update { StateObj it -> it.poison() }
             }
 
             return message
